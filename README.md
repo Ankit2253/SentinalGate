@@ -163,8 +163,7 @@ src/sentinelgate/
 └── static/         # dependency-free SOC dashboard
 ```
 
-Additional design detail is in [docs/architecture.md](docs/architecture.md). Recruiter-ready CV
-bullets and a short demonstration script are in [docs/portfolio-notes.md](docs/portfolio-notes.md).
+Additional design detail is in [docs/architecture.md](docs/architecture.md).
 
 ## Scope
 

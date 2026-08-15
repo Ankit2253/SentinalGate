@@ -1,0 +1,28 @@
+# SentinelGate configuration
+# Start in dry-run mode. Change to "apply" only inside a tested Linux VM.
+
+[server]
+host = "127.0.0.1"
+port = 8080
+token_env = "SENTINELGATE_ADMIN_TOKEN"
+
+[firewall]
+mode = "dry-run"
+table_name = "sentinelgate"
+management_cidrs = ["192.168.56.0/24"]
+management_ports = [22, 8080]
+default_input_policy = "drop"
+default_forward_policy = "drop"
+default_output_policy = "accept"
+allow_icmp = true
+log_rate = "10/second"
+nft_binary = "nft"
+auto_block = true
+scan_threshold = 12
+scan_window_seconds = 30
+ban_seconds = 900
+
+[storage]
+state_dir = "./data"
+database = "./data/sentinelgate.db"
+

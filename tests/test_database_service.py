@@ -1,0 +1,82 @@
+import json
+
+import pytest
+
+from sentinelgate.models import Event
+from sentinelgate.service import FirewallService
+
+
+def test_rule_crud_and_event_statistics(service: FirewallService) -> None:
+    rule = service.add_rule(
+        {
+            "name": "Block SSH",
+            "direction": "input",
+            "action": "block",
+            "protocol": "tcp",
+            "destination_port": 22,
+            "priority": 40,
+        }
+    )
+    service.database.add_event(
+        Event(
+            event_type="firewall_drop",
+            severity="medium",
+            action="blocked",
+            source_ip="203.0.113.8",
+            destination_ip="10.0.0.4",
+            destination_port=22,
+            protocol="tcp",
+        )
+    )
+
+    assert service.database.get_rule(rule.id).name == "Block SSH"
+    changed = service.update_rule(rule.id, {"enabled": False, "priority": 70})
+    assert changed.enabled is False
+    assert changed.priority == 70
+    assert service.database.event_stats()["blocked_events"] == 1
+    assert service.delete_rule(rule.id) is True
+    assert service.delete_rule(rule.id) is False
+
+
+def test_dry_run_apply_snapshot_and_rollback(service: FirewallService) -> None:
+    service.add_rule(
+        {
+            "name": "Allow web",
+            "direction": "input",
+            "action": "allow",
+            "protocol": "tcp",
+            "destination_port": 443,
+        }
+    )
+
+    applied = service.apply("Automated test")
+    assert applied["dry_run"] is True
+    assert applied["applied"] is False
+    assert applied["snapshot_id"] == 1
+    assert service.config.state_path.joinpath("last-rendered.nft").exists()
+
+    rollback = service.rollback(1)
+    assert rollback["source_snapshot"] == 1
+    assert rollback["snapshot_id"] == 2
+    assert service.database.active_snapshot_id() == 2
+
+
+def test_bans_protect_management_and_survive_render(service: FirewallService) -> None:
+    with pytest.raises(ValueError, match="protected management"):
+        service.ban("192.168.56.25", "Should never happen")
+
+    ban = service.ban("203.0.113.45", "Scan detected", seconds=300)
+    assert ban.active is True
+    assert "203.0.113.45 timeout" in service.render()
+    assert service.unban("203.0.113.45") is True
+    assert service.database.list_bans() == []
+
+
+def test_report_contains_evidence(service: FirewallService, tmp_path) -> None:
+    service.apply("Create snapshot")
+    report_path = service.export_report(tmp_path / "report.json")
+    report = json.loads(report_path.read_text())
+    assert report["status"]["name"] == "SentinelGate"
+    assert report["snapshots"][0]["reason"] == "Create snapshot"
+    assert report["recent_events"][0]["event_type"] == "ruleset_apply"
+

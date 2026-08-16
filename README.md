@@ -3,7 +3,8 @@
 SentinelGate is a safe-by-default Linux stateful firewall and blue-team monitoring platform. It
 turns validated policy into an atomic `nftables` ruleset, records every deployment, detects rapid
 port scanning, maintains temporary IPv4/IPv6 blocklists, and presents the result in a local SOC
-dashboard.
+dashboard. SentinelGate v1.0 also includes a small Yocto/OpenEmbedded layer that demonstrates
+embedded-Linux deployment hardening without changing the firewall engine or active policy.
 
 The project starts in **dry-run mode**: it can be fully demonstrated without root access and
 without changing the host firewall.
@@ -20,6 +21,8 @@ without changing the host firewall.
 - SQLite event, policy, ban, and snapshot history.
 - FastAPI control plane with bearer authentication for non-local binding.
 - Responsive dashboard, command-line interface, JSON evidence export, and deterministic demo data.
+- Yocto/OpenEmbedded integration with a custom BitBake recipe, minimal image recipe, systemd
+  sandboxing, sysctl hardening, and restricted runtime directories.
 - No `shell=True`, no raw nftables fragments, and no automatic change in the default mode.
 
 ## Quick start: safe dashboard demo
@@ -92,6 +95,37 @@ sudo .venv/bin/sentinelgate --config sentinelgate.toml apply --confirm APPLY
 
 SentinelGate owns only `table inet sentinelgate`; it does not flush unrelated host rulesets.
 
+## Yocto / embedded-Linux security integration
+
+The `yocto/meta-sentinelgate` layer demonstrates how SentinelGate can be hardened as part of an
+embedded Linux image build. It is intentionally separate from the Python firewall engine, so adding
+the layer does **not** silently modify SentinelGate rules or enable real firewall enforcement.
+
+The layer includes:
+
+- `sentinelgate-hardening_1.0.0.bb` — installs the hardening policy.
+- `sentinelgate-security-image.bb` — extends `core-image-minimal` with the hardening package.
+- A systemd drop-in using controls such as `NoNewPrivileges`, `ProtectSystem`, and capability
+  bounding while retaining the network privileges SentinelGate needs.
+- Conservative kernel/network sysctl settings that reduce exposure without forcing IP forwarding off.
+- `systemd-tmpfiles` rules that create SentinelGate state, log, and runtime directories with `0750`
+  permissions.
+
+Typical use inside an initialized Yocto build environment:
+
+```bash
+bitbake-layers add-layer /path/to/sentinelgate/yocto/meta-sentinelgate
+bitbake-layers show-layers
+bitbake-layers show-recipes sentinelgate-hardening
+bitbake sentinelgate-hardening
+bitbake sentinelgate-security-image
+```
+
+The repository includes automated metadata tests for this integration. A complete BitBake image build
+still requires a real Yocto build environment and is not claimed as part of the included test results.
+See [docs/YOCTO_INTEGRATION.md](docs/YOCTO_INTEGRATION.md) and
+[yocto/meta-sentinelgate/README.md](yocto/meta-sentinelgate/README.md).
+
 ## CLI reference
 
 | Command | Purpose |
@@ -144,26 +178,35 @@ distributed scans are known limitations, documented in [docs/threat-model.md](do
 .venv/bin/ruff check src tests
 ```
 
-The suite covers validation, rendering, database operations, dry-run apply and rollback, dynamic
-bans, log parsing, scan detection, authentication, and API rule management.
+The current SentinelGate v1.0 source contains **32 automated tests**. The suite covers validation,
+rendering, database operations, dry-run apply and rollback, dynamic bans, log parsing, scan detection,
+authentication, API rule management, and static validation of the Yocto layer, hardening recipe,
+systemd policy, sysctl policy, tmpfiles policy, and custom image recipe.
 
 ## Project map
 
 ```text
-src/sentinelgate/
-├── api.py          # authenticated API and dashboard delivery
-├── cli.py          # command-line workflows
-├── config.py       # TOML loading and startup safety checks
-├── database.py     # SQLite rule/event/snapshot repository
-├── demo.py         # deterministic sample telemetry
-├── models.py       # strict domain validation
-├── monitor.py      # kernel-log parser and scan detector
-├── nftables.py     # atomic ruleset renderer and backend
-├── service.py      # application orchestration and rollback
-└── static/         # dependency-free SOC dashboard
+sentinelgate/
+├── src/sentinelgate/
+│   ├── api.py          # authenticated API and dashboard delivery
+│   ├── cli.py          # command-line workflows
+│   ├── config.py       # TOML loading and startup safety checks
+│   ├── database.py     # SQLite rule/event/snapshot repository
+│   ├── demo.py         # deterministic sample telemetry
+│   ├── models.py       # strict domain validation
+│   ├── monitor.py      # kernel-log parser and scan detector
+│   ├── nftables.py     # atomic ruleset renderer and backend
+│   ├── service.py      # application orchestration and rollback
+│   └── static/         # dependency-free SOC dashboard
+├── yocto/meta-sentinelgate/   # Yocto/OpenEmbedded hardening layer
+├── systemd/                    # service units for normal Linux deployment
+├── tests/                      # application + Yocto metadata tests
+└── docs/                       # architecture, lab, threat model, Yocto notes
 ```
 
-Additional design detail is in [docs/architecture.md](docs/architecture.md).
+Additional design detail is in [docs/architecture.md](docs/architecture.md). Yocto design and test
+steps are in [docs/YOCTO_INTEGRATION.md](docs/YOCTO_INTEGRATION.md). Recruiter-ready CV bullets
+and a short demonstration script are in [docs/portfolio-notes.md](docs/portfolio-notes.md).
 
 ## Scope
 

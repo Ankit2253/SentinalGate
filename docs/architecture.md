@@ -13,6 +13,8 @@ flowchart TD
     Monitor --> DB
     Monitor --> Detect[Scan detector]
     Detect --> NFT
+    Yocto[meta-sentinelgate / BitBake] --> Hardening[systemd + sysctl + tmpfiles hardening]
+    Hardening --> Service[SentinelGate service deployment]
 ```
 
 ## Components
@@ -26,6 +28,7 @@ flowchart TD
 | Event monitor | Parses only `SG_*` kernel-log records | Treats log lines as untrusted input |
 | Scan detector | Detects many attempts across several ports in a time window | Suppresses automatic bans for management addresses |
 | FastAPI control plane | Authenticates remote API requests and exposes local UI | Non-loopback binding requires a bearer token |
+| Yocto hardening layer | Applies deployment-time service, sysctl, and runtime-directory hardening | Kept separate from policy logic; full image build requires a Yocto environment |
 
 ## Ruleset order
 

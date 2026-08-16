@@ -1,0 +1,32 @@
+[Unit]
+Description=SentinelGate firewall event monitor
+Documentation=file:/opt/sentinelgate/README.md
+After=sentinelgate.service
+Requires=sentinelgate.service
+
+[Service]
+Type=simple
+User=sentinelgate
+Group=sentinelgate
+SupplementaryGroups=systemd-journal
+WorkingDirectory=/opt/sentinelgate
+Environment=SENTINELGATE_CONFIG=/etc/sentinelgate/sentinelgate.toml
+ExecStart=/opt/sentinelgate/.venv/bin/sentinelgate monitor
+Restart=on-failure
+RestartSec=3
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+ReadWritePaths=/var/lib/sentinelgate
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
+

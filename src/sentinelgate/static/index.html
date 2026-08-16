@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="SentinelGate firewall operations dashboard">
+  <title>SentinelGate | Defense Console</title>
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+  <div class="ambient ambient-one"></div>
+  <div class="ambient ambient-two"></div>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="SentinelGate dashboard">
+      <span class="brand-mark" aria-hidden="true"><span></span></span>
+      <span><strong>SENTINEL</strong>GATE</span>
+    </a>
+    <nav class="top-actions" aria-label="Dashboard actions">
+      <button class="ghost" id="token-button" type="button">Access token</button>
+      <span class="system-state"><i id="state-dot"></i><span id="system-state">Connecting</span></span>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div>
+        <p class="eyebrow"><span>DEFENSE NODE</span> / SG-01</p>
+        <h1>Control the perimeter.<br><em>See every decision.</em></h1>
+        <p class="lede">A stateful Linux firewall with atomic policy deployment, scan detection, temporary blocking, and evidence-grade event history.</p>
+        <div class="hero-actions">
+          <button class="primary" id="apply-button" type="button">Deploy ruleset</button>
+          <button class="secondary" id="seed-button" type="button">Load demo telemetry</button>
+        </div>
+      </div>
+      <div class="mode-panel">
+        <div class="mode-ring"><span id="mode-short">—</span></div>
+        <div>
+          <p>ENFORCEMENT MODE</p>
+          <strong id="mode-name">Loading</strong>
+          <small id="mode-copy">Checking the local control plane</small>
+        </div>
+      </div>
+    </section>
+
+    <section class="metrics" aria-label="Key firewall metrics">
+      <article><p>BLOCKED EVENTS</p><strong id="metric-blocked">—</strong><small>Recorded decisions</small></article>
+      <article><p>ACTIVE RULES</p><strong id="metric-rules">—</strong><small>Enabled policies</small></article>
+      <article><p>HIGH SEVERITY</p><strong id="metric-high">—</strong><small>Needs review</small></article>
+      <article><p>DYNAMIC BANS</p><strong id="metric-bans">—</strong><small>Temporary blocks</small></article>
+    </section>
+
+    <section class="workspace-grid">
+      <article class="panel traffic-panel">
+        <div class="panel-heading">
+          <div><p class="kicker">TRAFFIC INTELLIGENCE</p><h2>Top observed sources</h2></div>
+          <span class="live-pill"><i></i> LIVE</span>
+        </div>
+        <div id="source-bars" class="source-bars"><p class="empty">Waiting for telemetry…</p></div>
+      </article>
+
+      <article class="panel posture-panel">
+        <div class="panel-heading"><div><p class="kicker">POLICY POSTURE</p><h2>Default verdicts</h2></div></div>
+        <div id="policy-list" class="policy-list"></div>
+        <div class="snapshot-line"><span>Current snapshot</span><strong id="snapshot-id">None</strong></div>
+      </article>
+    </section>
+
+    <section class="panel events-panel">
+      <div class="panel-heading">
+        <div><p class="kicker">DECISION STREAM</p><h2>Recent firewall events</h2></div>
+        <button class="icon-button" id="refresh-button" type="button" aria-label="Refresh dashboard">↻</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Time</th><th>Severity</th><th>Source</th><th>Destination</th><th>Protocol</th><th>Decision</th></tr></thead>
+          <tbody id="events-body"><tr><td colspan="6" class="empty">Loading events…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="rules-layout">
+      <article class="panel rules-panel">
+        <div class="panel-heading">
+          <div><p class="kicker">RULE ENGINE</p><h2>Custom policy</h2></div>
+          <span id="rule-count" class="count-pill">0 RULES</span>
+        </div>
+        <div id="rules-list" class="rules-list"><p class="empty">No custom rules yet.</p></div>
+      </article>
+
+      <article class="panel form-panel">
+        <div class="panel-heading"><div><p class="kicker">NEW CONTROL</p><h2>Add firewall rule</h2></div></div>
+        <form id="rule-form">
+          <label>Rule name<input name="name" maxlength="80" required placeholder="Allow HTTPS administration"></label>
+          <div class="form-row">
+            <label>Direction<select name="direction"><option value="input">Input</option><option value="forward">Forward</option><option value="output">Output</option></select></label>
+            <label>Decision<select name="action"><option value="allow">Allow</option><option value="block">Block</option></select></label>
+          </div>
+          <div class="form-row">
+            <label>Protocol<select name="protocol"><option value="tcp">TCP</option><option value="udp">UDP</option><option value="icmp">ICMP</option><option value="any">Any</option></select></label>
+            <label>Destination port<input name="destination_port" inputmode="numeric" placeholder="443 or 8000-8100"></label>
+          </div>
+          <label>Source network<input name="source" placeholder="10.10.0.0/16 or any"></label>
+          <div class="form-row compact">
+            <label>Priority<input name="priority" type="number" value="500" min="1" max="10000"></label>
+            <label class="check-label"><input name="log" type="checkbox" checked><span>Log matches</span></label>
+          </div>
+          <button class="primary full" type="submit">Add policy rule</button>
+        </form>
+      </article>
+    </section>
+
+    <footer>
+      <span>SENTINELGATE v1.0</span>
+      <span id="last-updated">Awaiting first sync</span>
+      <a href="/api/docs">API reference</a>
+    </footer>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="/assets/app.js" defer></script>
+</body>
+</html>
+

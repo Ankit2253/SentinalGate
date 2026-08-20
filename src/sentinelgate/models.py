@@ -152,6 +152,69 @@ class Event:
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
+        
+@dataclass(slots=True)
+class NetworkObservation:
+    destination_ip: str
+    destination_port: int
+    protocol: str
+    observed_at: str = field(default_factory=utc_now)
+
+    def __post_init__(self) -> None:
+        self.destination_ip = str(ip_address(self.destination_ip))
+
+        self.destination_port = int(self.destination_port)
+        if not 1 <= self.destination_port <= 65535:
+            raise ValueError("Invalid destination port")
+
+        self.protocol = str(self.protocol).lower().strip()
+        if self.protocol not in {"tcp", "udp"}:
+            raise ValueError("Observation protocol must be tcp or udp")
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
+class C2Detection:
+    destination_ip: str
+    destination_port: int
+    protocol: str
+    observation_count: int
+    mean_interval_seconds: float
+    jitter_seconds: float
+    confidence: float
+
+    def __post_init__(self) -> None:
+        self.destination_ip = str(ip_address(self.destination_ip))
+
+        self.destination_port = int(self.destination_port)
+        if not 1 <= self.destination_port <= 65535:
+            raise ValueError("Invalid destination port")
+
+        self.protocol = str(self.protocol).lower().strip()
+        if self.protocol not in {"tcp", "udp"}:
+            raise ValueError("Detection protocol must be tcp or udp")
+
+        self.observation_count = int(self.observation_count)
+        if self.observation_count < 2:
+            raise ValueError("Detection requires at least two observations")
+
+        self.mean_interval_seconds = float(self.mean_interval_seconds)
+        self.jitter_seconds = float(self.jitter_seconds)
+        self.confidence = float(self.confidence)
+
+        if self.mean_interval_seconds <= 0:
+            raise ValueError("Mean interval must be greater than zero")
+
+        if self.jitter_seconds < 0:
+            raise ValueError("Jitter cannot be negative")
+
+        if not 0.0 <= self.confidence <= 1.0:
+            raise ValueError("Confidence must be between 0 and 1")
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
 
 @dataclass(slots=True)
 class Ban:
@@ -167,3 +230,5 @@ class Ban:
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
+
+  

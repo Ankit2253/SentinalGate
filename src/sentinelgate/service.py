@@ -10,9 +10,10 @@ from pathlib import Path
 from typing import Any
 
 from sentinelgate import __version__
+from sentinelgate.c2guard import BeaconDetector
 from sentinelgate.config import AppConfig
 from sentinelgate.database import Database
-from sentinelgate.models import Ban, Event, Rule
+from sentinelgate.models import Ban, Event, NetworkObservation, Rule
 from sentinelgate.nftables import NftablesBackend, RulesetRenderer
 
 
@@ -27,6 +28,7 @@ class FirewallService:
         self.database = database or Database(config.database_path)
         self.backend = backend or NftablesBackend(config.firewall)
         self.renderer = RulesetRenderer(config.firewall)
+        self.c2_detector = BeaconDetector()
         self.database.initialize()
 
     def status(self) -> dict[str, Any]:
@@ -182,3 +184,15 @@ class FirewallService:
         }
         target.write_text(json.dumps(report, indent=2), encoding="utf-8")
         return target.resolve()
+    def analyse_c2_observations(
+        self,
+        observations: list[NetworkObservation],
+    ) -> list[Event]:
+        """Analyse outbound observations and store generated C2 events."""
+
+        events = self.c2_detector.analyse_events(observations)
+
+        for event in events:
+            self.database.add_event(event)
+
+        return events   

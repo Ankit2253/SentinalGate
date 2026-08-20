@@ -130,3 +130,51 @@ def test_database_stores_c2_detection_event(service) -> None:
         and event.destination_ip == "203.0.113.50"
         for event in stored
     )
+def test_service_analyses_and_stores_c2_events(
+    service: FirewallService,
+) -> None:
+    observations = [
+        NetworkObservation(
+            destination_ip="203.0.113.50",
+            destination_port=443,
+            protocol="tcp",
+            observed_at=f"2026-08-20T12:0{minute}:00+00:00",
+        )
+        for minute in range(5)
+    ]
+
+    events = service.analyse_c2_observations(observations)
+
+    assert len(events) == 1
+    assert events[0].id is not None
+    assert events[0].event_type == "suspected_c2_beacon"
+
+    stored = service.database.list_events(limit=10)
+
+    assert any(
+        event.event_type == "suspected_c2_beacon"
+        and event.destination_ip == "203.0.113.50"
+        for event in stored
+    )
+def test_service_does_not_store_normal_sparse_activity(
+    service: FirewallService,
+) -> None:
+    observations = [
+        NetworkObservation(
+            destination_ip="203.0.113.50",
+            destination_port=443,
+            protocol="tcp",
+            observed_at="2026-08-20T12:00:00+00:00",
+        ),
+        NetworkObservation(
+            destination_ip="203.0.113.50",
+            destination_port=443,
+            protocol="tcp",
+            observed_at="2026-08-20T12:03:00+00:00",
+        ),
+    ]
+
+    events = service.analyse_c2_observations(observations)
+
+    assert events == []
+    assert service.database.list_events(limit=10) == []

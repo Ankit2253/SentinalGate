@@ -1,5 +1,5 @@
 from sentinelgate.c2guard import BeaconDetector
-from sentinelgate.models import NetworkObservation
+from sentinelgate.models import C2Detection, NetworkObservation
 
 
 def _observation(timestamp: str) -> NetworkObservation:
@@ -136,3 +136,64 @@ def test_rejects_invalid_jitter_ratio_configuration() -> None:
         assert "between 0 and 1" in str(exc)
     else:
         raise AssertionError("Expected ValueError")
+def test_converts_detection_to_event() -> None:
+    observations = [
+        _observation("2026-08-20T12:00:00+00:00"),
+        _observation("2026-08-20T12:00:20+00:00"),
+        _observation("2026-08-20T12:00:40+00:00"),
+        _observation("2026-08-20T12:01:00+00:00"),
+        _observation("2026-08-20T12:01:20+00:00"),
+    ]
+
+    detector = BeaconDetector()
+
+    events = detector.analyse_events(observations)
+
+    assert len(events) == 1
+
+    event = events[0]
+
+    assert event.event_type == "suspected_c2_beacon"
+    assert event.action == "detected"
+    assert event.severity == "high"
+    assert event.destination_ip == "203.0.113.50"
+    assert event.destination_port == 443
+    assert event.protocol == "tcp"
+    assert event.details["observation_count"] == 5
+    assert event.details["mean_interval_seconds"] == 20.0
+    assert event.details["jitter_seconds"] == 0.0
+    assert event.details["jitter_ratio"] == 0.0
+    assert event.details["confidence"] == 1.0
+    assert event.details["detector"] == "periodic_beacon"
+def test_c2_event_severity_uses_confidence() -> None:
+
+    detector = BeaconDetector()
+
+    medium = detector.detection_to_event(
+        C2Detection(
+            destination_ip="203.0.113.50",
+            destination_port=443,
+            protocol="tcp",
+            observation_count=5,
+            mean_interval_seconds=20,
+            jitter_seconds=1,
+            jitter_ratio=0.05,
+            confidence=0.70,
+        )
+    )
+
+    low = detector.detection_to_event(
+        C2Detection(
+            destination_ip="203.0.113.50",
+            destination_port=443,
+            protocol="tcp",
+            observation_count=5,
+            mean_interval_seconds=20,
+            jitter_seconds=1.5,
+            jitter_ratio=0.075,
+            confidence=0.40,
+        )
+    )
+
+    assert medium.severity == "medium"
+    assert low.severity == "low"

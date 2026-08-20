@@ -2,7 +2,8 @@ import json
 
 import pytest
 
-from sentinelgate.models import Event
+from sentinelgate.c2guard import BeaconDetector
+from sentinelgate.models import Event, NetworkObservation
 from sentinelgate.service import FirewallService
 
 
@@ -80,3 +81,52 @@ def test_report_contains_evidence(service: FirewallService, tmp_path) -> None:
     assert report["snapshots"][0]["reason"] == "Create snapshot"
     assert report["recent_events"][0]["event_type"] == "ruleset_apply"
 
+def test_database_stores_c2_detection_event(service) -> None:
+    observations = [
+        NetworkObservation(
+            destination_ip="203.0.113.50",
+            destination_port=443,
+            protocol="tcp",
+            observed_at="2026-08-20T12:00:00+00:00",
+        ),
+        NetworkObservation(
+            destination_ip="203.0.113.50",
+            destination_port=443,
+            protocol="tcp",
+            observed_at="2026-08-20T12:00:20+00:00",
+        ),
+        NetworkObservation(
+            destination_ip="203.0.113.50",
+            destination_port=443,
+            protocol="tcp",
+            observed_at="2026-08-20T12:00:40+00:00",
+        ),
+        NetworkObservation(
+            destination_ip="203.0.113.50",
+            destination_port=443,
+            protocol="tcp",
+            observed_at="2026-08-20T12:01:00+00:00",
+        ),
+        NetworkObservation(
+            destination_ip="203.0.113.50",
+            destination_port=443,
+            protocol="tcp",
+            observed_at="2026-08-20T12:01:20+00:00",
+        ),
+    ]
+
+    detector = BeaconDetector()
+
+    events = detector.analyse_events(observations)
+
+    assert len(events) == 1
+
+    service.database.add_event(events[0])
+
+    stored = service.database.list_events(limit=10)
+
+    assert any(
+        event.event_type == "suspected_c2_beacon"
+        and event.destination_ip == "203.0.113.50"
+        for event in stored
+    )

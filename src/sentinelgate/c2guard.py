@@ -7,7 +7,7 @@ from datetime import datetime
 from itertools import pairwise
 from statistics import mean, pstdev
 
-from sentinelgate.models import C2Detection, NetworkObservation
+from sentinelgate.models import C2Detection, Event, NetworkObservation
 
 
 class BeaconDetector:
@@ -62,6 +62,42 @@ class BeaconDetector:
                 detections.append(detection)
 
         return detections
+        
+    def analyse_events(
+        self,
+        observations: list[NetworkObservation],
+   	) -> list[Event]:
+        return [
+            self.detection_to_event(detection)
+            for detection in self.analyse(observations)
+        ]
+        
+    def detection_to_event(self, detection: C2Detection) -> Event:
+        """Convert a behavioural C2 detection into a SentinelGate event."""
+
+        if detection.confidence >= 0.85:
+            severity = "high"
+        elif detection.confidence >= 0.60:
+            severity = "medium"
+        else:
+            severity = "low"
+
+        return Event(
+            event_type="suspected_c2_beacon",
+            severity=severity,
+            action="detected",
+            destination_ip=detection.destination_ip,
+            destination_port=detection.destination_port,
+            protocol=detection.protocol,
+            details={
+                "observation_count": detection.observation_count,
+                "mean_interval_seconds": detection.mean_interval_seconds,
+                "jitter_seconds": detection.jitter_seconds,
+                "jitter_ratio": detection.jitter_ratio,
+                "confidence": detection.confidence,
+                "detector": "periodic_beacon",
+            },
+        )
 
     def _analyse_group(
         self,

@@ -183,6 +183,7 @@ class C2Detection:
     observation_count: int
     mean_interval_seconds: float
     jitter_seconds: float
+    jitter_ratio: float
     confidence: float
 
     def __post_init__(self) -> None:
@@ -202,6 +203,7 @@ class C2Detection:
 
         self.mean_interval_seconds = float(self.mean_interval_seconds)
         self.jitter_seconds = float(self.jitter_seconds)
+        self.jitter_ratio = float(self.jitter_ratio)
         self.confidence = float(self.confidence)
 
         if self.mean_interval_seconds <= 0:
@@ -209,7 +211,10 @@ class C2Detection:
 
         if self.jitter_seconds < 0:
             raise ValueError("Jitter cannot be negative")
-
+            
+        if not 0.0 <= self.jitter_ratio <= 1.0:
+            raise ValueError("Jitter ratio must be between 0 and 1")
+            
         if not 0.0 <= self.confidence <= 1.0:
             raise ValueError("Confidence must be between 0 and 1")
 

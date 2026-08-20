@@ -107,6 +107,7 @@ def test_c2_detection_validates_values() -> None:
         observation_count=6,
         mean_interval_seconds=20,
         jitter_seconds=0.5,
+        jitter_ratio=0.025,
         confidence=0.92,
     )
 
@@ -124,5 +125,6 @@ def test_c2_detection_rejects_invalid_confidence() -> None:
             observation_count=6,
             mean_interval_seconds=20,
             jitter_seconds=0.5,
+            jitter_ratio=0.025,
             confidence=1.5,
         )

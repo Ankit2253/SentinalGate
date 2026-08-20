@@ -17,10 +17,12 @@ class BeaconDetector:
         self,
         minimum_observations: int = 5,
         maximum_jitter_seconds: float = 2.0,
+        maximum_jitter_ratio: float = 0.15,
         minimum_interval_seconds: float = 5.0,
     ) -> None:
         self.minimum_observations = int(minimum_observations)
         self.maximum_jitter_seconds = float(maximum_jitter_seconds)
+        self.maximum_jitter_ratio = float(maximum_jitter_ratio)
         self.minimum_interval_seconds = float(minimum_interval_seconds)
 
         if self.minimum_observations < 3:
@@ -28,6 +30,9 @@ class BeaconDetector:
 
         if self.maximum_jitter_seconds < 0:
             raise ValueError("maximum_jitter_seconds cannot be negative")
+            
+        if not 0.0 < self.maximum_jitter_ratio <= 1.0:
+            raise ValueError("maximum_jitter_ratio must be between 0 and 1")
 
         if self.minimum_interval_seconds <= 0:
             raise ValueError("minimum_interval_seconds must be greater than zero")
@@ -85,11 +90,15 @@ class BeaconDetector:
             return None
 
         jitter = pstdev(intervals)
+        jitter_ratio = jitter / mean_interval
 
-        if jitter > self.maximum_jitter_seconds:
-            return None
+        if (
+             jitter > self.maximum_jitter_seconds
+             or jitter_ratio > self.maximum_jitter_ratio
+        ):
+             return None
 
-        confidence = self._confidence(jitter)
+        confidence = self._confidence(jitter, jitter_ratio)
 
         destination_ip, destination_port, protocol = key
 
@@ -100,12 +109,27 @@ class BeaconDetector:
             observation_count=len(observations),
             mean_interval_seconds=round(mean_interval, 3),
             jitter_seconds=round(jitter, 3),
+            jitter_ratio=round(jitter_ratio, 3),
             confidence=round(confidence, 3),
         )
 
-    def _confidence(self, jitter_seconds: float) -> float:
-        if self.maximum_jitter_seconds == 0:
-            return 1.0 if jitter_seconds == 0 else 0.0
+    def _confidence(
+    	self,
+    	jitter_seconds: float,
+    	jitter_ratio: float,
+	) -> float:
+    	if self.maximum_jitter_seconds == 0:
+        	absolute_score = 1.0 if jitter_seconds == 0 else 0.0
+    	else:
+        	absolute_score = 1.0 - (
+            	jitter_seconds / self.maximum_jitter_seconds
+        	)
 
-        ratio = jitter_seconds / self.maximum_jitter_seconds
-        return max(0.0, min(1.0, 1.0 - ratio))
+    	relative_score = 1.0 - (
+        	jitter_ratio / self.maximum_jitter_ratio
+    	)
+
+    	return max(
+        	0.0,
+        	min(1.0, (absolute_score + relative_score) / 2),
+    	)

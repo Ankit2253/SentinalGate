@@ -7,6 +7,7 @@ from sentinelgate.models import (
     NetworkObservation,
     Protocol,
     Rule,
+    ThreatIndicator,
     normalize_port,
 )
 
@@ -126,5 +127,25 @@ def test_c2_detection_rejects_invalid_confidence() -> None:
             mean_interval_seconds=20,
             jitter_seconds=0.5,
             jitter_ratio=0.025,
+            confidence=1.5,
+        )
+def test_threat_indicator_validates_ip() -> None:
+    indicator = ThreatIndicator(
+        value="203.0.113.50",
+        indicator_type="ip",
+        confidence=0.90,
+        source="local-test",
+    )
+
+    assert indicator.value == "203.0.113.50"
+    assert indicator.indicator_type == "ip"
+    assert indicator.confidence == 0.90
+
+
+def test_threat_indicator_rejects_invalid_confidence() -> None:
+    with pytest.raises(ValueError):
+        ThreatIndicator(
+            value="203.0.113.50",
+            indicator_type="ip",
             confidence=1.5,
         )

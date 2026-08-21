@@ -222,6 +222,36 @@ class C2Detection:
         return asdict(self)
 
 @dataclass(slots=True)
+class ThreatIndicator:
+    value: str
+    indicator_type: str
+    confidence: float
+    source: str = "local"
+    description: str = ""
+
+    def __post_init__(self) -> None:
+        self.value = str(self.value).strip()
+        self.indicator_type = str(self.indicator_type).lower().strip()
+        self.source = str(self.source).strip()
+        self.description = str(self.description).strip()
+
+        if self.indicator_type not in {"ip", "domain"}:
+            raise ValueError("Indicator type must be ip or domain")
+
+        self.confidence = float(self.confidence)
+        if not 0.0 <= self.confidence <= 1.0:
+            raise ValueError("Indicator confidence must be between 0 and 1")
+
+        if not self.value:
+            raise ValueError("Indicator value cannot be empty")
+
+        if self.indicator_type == "ip":
+            self.value = str(ip_address(self.value))
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+@dataclass(slots=True)
 class Ban:
     ip: str
     reason: str

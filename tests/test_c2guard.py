@@ -1,5 +1,6 @@
 from sentinelgate.c2guard import BeaconDetector
-from sentinelgate.models import C2Detection, NetworkObservation
+from sentinelgate.intelligence import ThreatIntelligence
+from sentinelgate.models import C2Detection, NetworkObservation, ThreatIndicator
 
 
 def _observation(timestamp: str) -> NetworkObservation:
@@ -197,3 +198,94 @@ def test_c2_event_severity_uses_confidence() -> None:
 
     assert medium.severity == "medium"
     assert low.severity == "low"
+def test_enriches_event_with_threat_intelligence_match() -> None:
+    intelligence = ThreatIntelligence(
+        [
+            ThreatIndicator(
+                value="203.0.113.50",
+                indicator_type="ip",
+                confidence=0.95,
+                source="synthetic-test-feed",
+                description="Synthetic suspicious destination",
+            )
+        ]
+    )
+
+    detector = BeaconDetector(intelligence=intelligence)
+
+    observations = [
+        _observation("2026-08-20T12:00:00+00:00"),
+        _observation("2026-08-20T12:00:20+00:00"),
+        _observation("2026-08-20T12:00:40+00:00"),
+        _observation("2026-08-20T12:01:00+00:00"),
+        _observation("2026-08-20T12:01:20+00:00"),
+    ]
+
+    events = detector.analyse_events(observations)
+
+    assert len(events) == 1
+
+    event = events[0]
+
+    assert event.details["threat_intelligence_match"] is True
+    assert event.details["indicator"]["value"] == "203.0.113.50"
+    assert event.details["indicator"]["confidence"] == 0.95
+    assert event.details["indicator"]["source"] == "synthetic-test-feed"
+
+
+def test_event_without_intelligence_match_remains_unmatched() -> None:
+    intelligence = ThreatIntelligence(
+        [
+            ThreatIndicator(
+                value="198.51.100.25",
+                indicator_type="ip",
+                confidence=0.95,
+            )
+        ]
+    )
+
+    detector = BeaconDetector(intelligence=intelligence)
+
+    observations = [
+        _observation("2026-08-20T12:00:00+00:00"),
+        _observation("2026-08-20T12:00:20+00:00"),
+        _observation("2026-08-20T12:00:40+00:00"),
+        _observation("2026-08-20T12:01:00+00:00"),
+        _observation("2026-08-20T12:01:20+00:00"),
+    ]
+
+    events = detector.analyse_events(observations)
+
+    assert len(events) == 1
+    assert events[0].details["threat_intelligence_match"] is False
+    assert "indicator" not in events[0].details
+
+
+def test_high_confidence_indicator_can_raise_event_severity() -> None:
+    intelligence = ThreatIntelligence(
+        [
+            ThreatIndicator(
+                value="203.0.113.50",
+                indicator_type="ip",
+                confidence=0.90,
+            )
+        ]
+    )
+
+    detector = BeaconDetector(intelligence=intelligence)
+
+    detection = C2Detection(
+        destination_ip="203.0.113.50",
+        destination_port=443,
+        protocol="tcp",
+        observation_count=5,
+        mean_interval_seconds=20,
+        jitter_seconds=1,
+        jitter_ratio=0.05,
+        confidence=0.65,
+    )
+
+    event = detector.detection_to_event(detection)
+
+    assert event.severity == "high"
+    assert event.details["threat_intelligence_match"] is True

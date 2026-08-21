@@ -7,6 +7,7 @@ from datetime import datetime
 from itertools import pairwise
 from statistics import mean, pstdev
 
+from sentinelgate.intelligence import ThreatIntelligence
 from sentinelgate.models import C2Detection, Event, NetworkObservation
 
 
@@ -19,11 +20,13 @@ class BeaconDetector:
         maximum_jitter_seconds: float = 2.0,
         maximum_jitter_ratio: float = 0.15,
         minimum_interval_seconds: float = 5.0,
+        intelligence: ThreatIntelligence | None = None,
     ) -> None:
         self.minimum_observations = int(minimum_observations)
         self.maximum_jitter_seconds = float(maximum_jitter_seconds)
         self.maximum_jitter_ratio = float(maximum_jitter_ratio)
         self.minimum_interval_seconds = float(minimum_interval_seconds)
+        self.intelligence = intelligence
 
         if self.minimum_observations < 3:
             raise ValueError("minimum_observations must be at least 3")
@@ -66,12 +69,11 @@ class BeaconDetector:
     def analyse_events(
         self,
         observations: list[NetworkObservation],
-   	) -> list[Event]:
+    ) -> list[Event]:
         return [
             self.detection_to_event(detection)
             for detection in self.analyse(observations)
         ]
-        
     def detection_to_event(self, detection: C2Detection) -> Event:
         """Convert a behavioural C2 detection into a SentinelGate event."""
 
@@ -82,6 +84,26 @@ class BeaconDetector:
         else:
             severity = "low"
 
+        details = {
+            "observation_count": detection.observation_count,
+            "mean_interval_seconds": detection.mean_interval_seconds,
+            "jitter_seconds": detection.jitter_seconds,
+            "jitter_ratio": detection.jitter_ratio,
+            "confidence": detection.confidence,
+            "detector": "periodic_beacon",
+            "threat_intelligence_match": False,
+        }
+
+        if self.intelligence is not None:
+            indicator = self.intelligence.match_ip(detection.destination_ip)
+
+            if indicator is not None:
+                details["threat_intelligence_match"] = True
+                details["indicator"] = indicator.to_dict()
+
+                if indicator.confidence >= 0.80:
+                    severity = "high"
+
         return Event(
             event_type="suspected_c2_beacon",
             severity=severity,
@@ -89,16 +111,9 @@ class BeaconDetector:
             destination_ip=detection.destination_ip,
             destination_port=detection.destination_port,
             protocol=detection.protocol,
-            details={
-                "observation_count": detection.observation_count,
-                "mean_interval_seconds": detection.mean_interval_seconds,
-                "jitter_seconds": detection.jitter_seconds,
-                "jitter_ratio": detection.jitter_ratio,
-                "confidence": detection.confidence,
-                "detector": "periodic_beacon",
-            },
-        )
-
+            details=details,
+        )        
+    
     def _analyse_group(
         self,
         key: tuple[str, int, str],
@@ -150,22 +165,22 @@ class BeaconDetector:
         )
 
     def _confidence(
-    	self,
-    	jitter_seconds: float,
-    	jitter_ratio: float,
-	) -> float:
-    	if self.maximum_jitter_seconds == 0:
-        	absolute_score = 1.0 if jitter_seconds == 0 else 0.0
-    	else:
-        	absolute_score = 1.0 - (
-            	jitter_seconds / self.maximum_jitter_seconds
-        	)
+        self,
+        jitter_seconds: float,
+        jitter_ratio: float,
+    ) -> float:
+        if self.maximum_jitter_seconds == 0:
+            absolute_score = 1.0 if jitter_seconds == 0 else 0.0
+        else:
+            absolute_score = 1.0 - (
+                jitter_seconds / self.maximum_jitter_seconds
+            )
 
-    	relative_score = 1.0 - (
-        	jitter_ratio / self.maximum_jitter_ratio
-    	)
+        relative_score = 1.0 - (
+            jitter_ratio / self.maximum_jitter_ratio
+        )
 
-    	return max(
-        	0.0,
-        	min(1.0, (absolute_score + relative_score) / 2),
-    	)
+        return max(
+            0.0,
+            min(1.0, (absolute_score + relative_score) / 2),
+        )

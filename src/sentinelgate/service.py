@@ -42,6 +42,7 @@ class FirewallService:
             "rules_enabled": sum(rule.enabled for rule in rules),
             "active_bans": len(self.database.list_bans()),
             "active_snapshot": self.database.active_snapshot_id(),
+            "c2_guard": self.c2_status(),
             "policies": {
                 "input": self.config.firewall.default_input_policy,
                 "forward": self.config.firewall.default_forward_policy,
@@ -196,3 +197,22 @@ class FirewallService:
             self.database.add_event(event)
 
         return events   
+    def c2_status(self) -> dict[str, Any]:
+        """Return a summary of stored C2 Guard alerts."""
+
+        events = [
+            event
+            for event in self.database.list_events(limit=1000)
+            if event.event_type == "suspected_c2_beacon"
+        ]
+
+        return {
+            "enabled": True,
+            "alerts_total": len(events),
+            "high_severity": sum(
+                event.severity in {"high", "critical"}
+                for event in events
+            ),
+            "latest_alert": events[0].to_dict() if events else None,
+        }
+

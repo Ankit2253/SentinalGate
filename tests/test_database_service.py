@@ -178,3 +178,43 @@ def test_service_does_not_store_normal_sparse_activity(
 
     assert events == []
     assert service.database.list_events(limit=10) == []
+
+
+def test_c2_status_is_empty_initially(service: FirewallService) -> None:
+    status = service.c2_status()
+
+    assert status["enabled"] is True
+    assert status["alerts_total"] == 0
+    assert status["high_severity"] == 0
+    assert status["latest_alert"] is None
+
+
+def test_c2_status_reports_stored_alert(service: FirewallService) -> None:
+    service.database.add_event(
+        Event(
+            event_type="suspected_c2_beacon",
+            severity="high",
+            action="detected",
+            destination_ip="203.0.113.50",
+            destination_port=443,
+            protocol="tcp",
+            details={
+                "confidence": 0.95,
+                "detector": "periodic_beacon",
+            },
+        )
+    )
+
+    status = service.c2_status()
+
+    assert status["alerts_total"] == 1
+    assert status["high_severity"] == 1
+    assert status["latest_alert"] is not None
+    assert status["latest_alert"]["destination_ip"] == "203.0.113.50"
+
+
+def test_main_status_includes_c2_guard(service: FirewallService) -> None:
+    status = service.status()
+
+    assert "c2_guard" in status
+    assert status["c2_guard"]["alerts_total"] == 0

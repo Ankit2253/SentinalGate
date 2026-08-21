@@ -82,7 +82,20 @@ def create_app(service: FirewallService) -> FastAPI:
         )
         response.headers["Cache-Control"] = "no-store"
         return response
+    @app.get("/api/c2/status")
+    def c2_status() -> dict[str, Any]:
+        return service.c2_status()
+    @app.get("/api/c2/alerts")
+    def c2_alerts(limit: int = 50) -> list[dict[str, Any]]:
+        limit = max(1, min(int(limit), 250))
 
+        events = [
+            event
+            for event in service.database.list_events(limit=1000)
+            if event.event_type == "suspected_c2_beacon"
+        ]
+
+        return [event.to_dict() for event in events[:limit]]
     def require_auth(authorization: str | None = Header(default=None)) -> None:
         expected = service.config.server.admin_token
         if not expected:

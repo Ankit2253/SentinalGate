@@ -289,3 +289,45 @@ def test_high_confidence_indicator_can_raise_event_severity() -> None:
 
     assert event.severity == "high"
     assert event.details["threat_intelligence_match"] is True
+def test_trusted_destination_is_suppressed() -> None:
+    detector = BeaconDetector(
+        trusted_destinations={"203.0.113.50"}
+    )
+
+    observations = [
+        _observation("2026-08-20T12:00:00+00:00"),
+        _observation("2026-08-20T12:00:20+00:00"),
+        _observation("2026-08-20T12:00:40+00:00"),
+        _observation("2026-08-20T12:01:00+00:00"),
+        _observation("2026-08-20T12:01:20+00:00"),
+    ]
+
+    assert detector.analyse(observations) == []
+def test_allowlist_does_not_hide_other_destinations() -> None:
+    detector = BeaconDetector(
+        trusted_destinations={"198.51.100.25"}
+    )
+
+    observations = [
+        _observation("2026-08-20T12:00:00+00:00"),
+        _observation("2026-08-20T12:00:20+00:00"),
+        _observation("2026-08-20T12:00:40+00:00"),
+        _observation("2026-08-20T12:01:00+00:00"),
+        _observation("2026-08-20T12:01:20+00:00"),
+    ]
+
+    detections = detector.analyse(observations)
+
+    assert len(detections) == 1
+    assert detections[0].destination_ip == "203.0.113.50"
+
+
+def test_invalid_trusted_destination_is_rejected() -> None:
+    try:
+        BeaconDetector(
+            trusted_destinations={"not-an-ip"}
+        )
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Expected ValueError")

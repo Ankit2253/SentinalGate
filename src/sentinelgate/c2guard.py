@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import datetime
+from ipaddress import ip_address
 from itertools import pairwise
 from statistics import mean, pstdev
 
@@ -21,13 +22,20 @@ class BeaconDetector:
         maximum_jitter_ratio: float = 0.15,
         minimum_interval_seconds: float = 5.0,
         intelligence: ThreatIntelligence | None = None,
+        trusted_destinations: set[str] | None = None,
+        minimum_confidence: float = 0.50,
     ) -> None:
         self.minimum_observations = int(minimum_observations)
         self.maximum_jitter_seconds = float(maximum_jitter_seconds)
         self.maximum_jitter_ratio = float(maximum_jitter_ratio)
         self.minimum_interval_seconds = float(minimum_interval_seconds)
         self.intelligence = intelligence
-
+        self.trusted_destinations = {
+            str(ip_address(address))
+            for address in (trusted_destinations or set())
+        }
+        self.minimum_confidence = float(minimum_confidence)
+        
         if self.minimum_observations < 3:
             raise ValueError("minimum_observations must be at least 3")
 
@@ -39,6 +47,9 @@ class BeaconDetector:
 
         if self.minimum_interval_seconds <= 0:
             raise ValueError("minimum_interval_seconds must be greater than zero")
+       
+        if not 0.0 <= self.minimum_confidence <= 1.0:
+            raise ValueError("minimum_confidence must be between 0 and 1")
 
     def analyse(
         self,
@@ -153,6 +164,12 @@ class BeaconDetector:
 
         destination_ip, destination_port, protocol = key
 
+        if confidence < self.minimum_confidence:
+            return None
+
+        if destination_ip in self.trusted_destinations:
+            return None
+
         return C2Detection(
             destination_ip=destination_ip,
             destination_port=destination_port,
@@ -184,3 +201,4 @@ class BeaconDetector:
             0.0,
             min(1.0, (absolute_score + relative_score) / 2),
         )
+	

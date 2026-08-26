@@ -156,6 +156,31 @@ class Database:
             event.id = cursor.lastrowid
         return event
 
+
+    def get_event(self, event_id: int) -> Event | None:
+        with self.connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM events WHERE id = ?",
+                (event_id,),
+            ).fetchone()
+
+        if row is None:
+            return None
+
+        return Event(
+            id=row["id"],
+            occurred_at=row["occurred_at"],
+            event_type=row["event_type"],
+            severity=row["severity"],
+            action=row["action"],
+            source_ip=row["source_ip"],
+            destination_ip=row["destination_ip"],
+            destination_port=row["destination_port"],
+            protocol=row["protocol"],
+            rule_id=row["rule_id"],
+            raw=row["raw"],
+            details=json.loads(row["details"] or "{}"),
+        )  
     def list_events(
         self,
         limit: int = 100,

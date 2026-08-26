@@ -133,3 +133,23 @@ def test_scenario_service_stores_detected_beacon(service) -> None:
 
     assert status["alerts_total"] == 1
     assert status["latest_alert"] is not None
+def test_detection_does_not_automatically_create_ban(service) -> None:
+    start = datetime(2026, 8, 27, 12, 0, tzinfo=UTC)
+
+    observations = [
+        NetworkObservation(
+            destination_ip="198.51.100.200",
+            destination_port=443,
+            protocol="tcp",
+            observed_at=(start + timedelta(seconds=20 * index)).isoformat(),
+        )
+        for index in range(5)
+    ]
+
+    events = service.analyse_c2_observations(observations)
+
+    assert len(events) == 1
+
+    status = service.status()
+
+    assert status["active_bans"] == 0

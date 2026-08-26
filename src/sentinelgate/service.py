@@ -215,4 +215,38 @@ class FirewallService:
             ),
             "latest_alert": events[0].to_dict() if events else None,
         }
+        
+    def respond_to_c2_alert(
+        self,
+        event_id: int,
+        *,
+        reason: str = "Analyst-approved C2 response",
+        seconds: int | None = None,
+    ) -> dict[str, Any]:
+        """Manually block the destination associated with a stored C2 alert."""
 
+        event = self.database.get_event(event_id)
+
+        if event is None:
+            raise ValueError(f"Event {event_id} was not found")
+
+        if event.event_type != "suspected_c2_beacon":
+            raise ValueError("Event is not a C2 Guard alert")
+
+        if not event.destination_ip:
+            raise ValueError("C2 alert does not contain a destination IP")
+
+        ban = self.ban(
+            event.destination_ip,
+            reason,
+            seconds,
+        )
+
+        return {
+            "event_id": event_id,
+            "destination_ip": event.destination_ip,
+            "action": "blocked",
+            "ban": ban.to_dict(),
+        }
+
+   

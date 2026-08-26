@@ -59,6 +59,9 @@ class BanRequest(BaseModel):
     reason: str = Field(default="Manual dashboard ban", min_length=1, max_length=200)
     seconds: int | None = Field(default=None, ge=30, le=604_800)
 
+class C2ResponseRequest(BaseModel):
+    reason: str = "Analyst-approved C2 response"
+    seconds: int | None = None
 
 def create_app(service: FirewallService) -> FastAPI:
     app = FastAPI(
@@ -144,7 +147,21 @@ def create_app(service: FirewallService) -> FastAPI:
     def delete_rule(rule_id: str) -> None:
         if not service.delete_rule(rule_id):
             raise HTTPException(status_code=404, detail="Rule not found")
-
+    @router.post("/c2/alerts/{event_id}/block")
+    def block_c2_alert(
+        event_id: int,
+        payload: C2ResponseRequest,
+    ) -> dict[str, Any]:
+        try:
+            return service.respond_to_c2_alert(
+                event_id,
+                reason=payload.reason,
+                seconds=payload.seconds,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except NftablesError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
     @router.post("/apply")
     def apply_rules(payload: ApplyRequest) -> dict[str, Any]:
         confirmed = payload.confirmation == "APPLY"

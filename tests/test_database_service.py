@@ -218,3 +218,42 @@ def test_main_status_includes_c2_guard(service: FirewallService) -> None:
 
     assert "c2_guard" in status
     assert status["c2_guard"]["alerts_total"] == 0
+def test_c2_response_rejects_non_c2_event(service: FirewallService) -> None:
+    event = Event(
+        event_type="firewall_decision",
+        severity="medium",
+        action="blocked",
+        destination_ip="203.0.113.25",
+        destination_port=443,
+        protocol="tcp",
+    )
+
+    stored = service.database.add_event(event)
+
+    with pytest.raises(ValueError, match="not a C2 Guard alert"):
+        service.respond_to_c2_alert(stored.id)
+def test_c2_response_uses_existing_ban_path(service: FirewallService) -> None:
+    event = Event(
+        event_type="suspected_c2_beacon",
+        severity="high",
+        action="detected",
+        destination_ip="203.0.113.90",
+        destination_port=443,
+        protocol="tcp",
+        details={"confidence": 1.0},
+    )
+
+    stored = service.database.add_event(event)
+
+    result = service.respond_to_c2_alert(
+        stored.id,
+        reason="Analyst approved test response",
+        seconds=300,
+    )
+
+    assert result["event_id"] == stored.id
+    assert result["destination_ip"] == "203.0.113.90"
+    assert result["action"] == "blocked"
+
+
+    

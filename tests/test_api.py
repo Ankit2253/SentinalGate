@@ -102,3 +102,32 @@ def test_c2_alerts_endpoint_returns_stored_alert(service) -> None:
     assert len(payload) == 1
     assert payload[0]["event_type"] == "suspected_c2_beacon"
     assert payload[0]["destination_ip"] == "203.0.113.50"
+def test_c2_alert_can_be_blocked_by_analyst(service) -> None:
+    event = Event(
+        event_type="suspected_c2_beacon",
+        severity="high",
+        action="detected",
+        destination_ip="203.0.113.90",
+        destination_port=443,
+        protocol="tcp",
+        details={"confidence": 1.0},
+    )
+
+    stored = service.database.add_event(event)
+
+    client = TestClient(create_app(service))
+
+    response = client.post(
+        f"/api/c2/alerts/{stored.id}/block",
+        json={
+            "reason": "Analyst approved",
+            "seconds": 300,
+        },
+    )
+
+    assert response.status_code == 200
+
+    payload = response.json()
+
+    assert payload["action"] == "blocked"
+    assert payload["destination_ip"] == "203.0.113.90"

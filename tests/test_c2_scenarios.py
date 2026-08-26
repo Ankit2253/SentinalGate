@@ -1,4 +1,4 @@
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sentinelgate.c2guard import BeaconDetector
 from sentinelgate.intelligence import ThreatIntelligence
@@ -113,7 +113,7 @@ def test_scenario_known_suspicious_destination_is_enriched() -> None:
 
 
 def test_scenario_service_stores_detected_beacon(service) -> None:
-    start = datetime(2026, 8, 23, 16, 0, tzinfo=timezone.utc)
+    start = datetime(2026, 8, 23, 16, 0, tzinfo=UTC)
 
     observations = [
         NetworkObservation(

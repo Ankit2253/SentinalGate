@@ -178,7 +178,6 @@ def main(argv: list[str] | None = None) -> None:
         elif args.command == "c2":
             _handle_c2(service, args)
         elif args.command == "ban":
-            _handle_c2(service, args)
             _json(service.ban(args.address, args.reason, args.seconds).to_dict())
         elif args.command == "unban":
             _json({"removed": service.unban(args.address)})

@@ -256,4 +256,23 @@ def test_c2_response_uses_existing_ban_path(service: FirewallService) -> None:
     assert result["action"] == "blocked"
 
 
+def test_service_uses_configured_c2_trusted_destination(app_config) -> None:
+    app_config.c2_guard.trusted_destinations = ["192.0.2.25"]
+
+    service = FirewallService(app_config)
+
+    assert "192.0.2.25" in service.c2_detector.trusted_destinations
+
+
+def test_service_uses_configured_threat_intelligence_ip(app_config) -> None:
+    app_config.c2_guard.threat_intelligence_ips = ["198.51.100.99"]
+
+    service = FirewallService(app_config)
+
+    indicator = service.c2_detector.intelligence.match_ip("198.51.100.99")
+
+    assert indicator is not None
+    assert indicator.value == "198.51.100.99"
+    assert indicator.source == "local-config"
+
     

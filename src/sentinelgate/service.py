@@ -13,7 +13,8 @@ from sentinelgate import __version__
 from sentinelgate.c2guard import BeaconDetector
 from sentinelgate.config import AppConfig
 from sentinelgate.database import Database
-from sentinelgate.models import Ban, Event, NetworkObservation, Rule
+from sentinelgate.intelligence import ThreatIntelligence
+from sentinelgate.models import Ban, Event, NetworkObservation, Rule, ThreatIndicator
 from sentinelgate.nftables import NftablesBackend, RulesetRenderer
 
 
@@ -28,7 +29,24 @@ class FirewallService:
         self.database = database or Database(config.database_path)
         self.backend = backend or NftablesBackend(config.firewall)
         self.renderer = RulesetRenderer(config.firewall)
-        self.c2_detector = BeaconDetector()
+        intelligence = ThreatIntelligence(
+             indicators=[
+                ThreatIndicator(
+                    value=address,
+                    indicator_type="ip",
+                    confidence=0.90,
+                    source="local-config",
+                    description="Configured local threat-intelligence indicator",
+                )
+                 for address in config.c2_guard.threat_intelligence_ips
+             ]
+        )
+
+        self.c2_detector = BeaconDetector(
+            intelligence=intelligence,
+            trusted_destinations=set(config.c2_guard.trusted_destinations),
+            minimum_confidence=config.c2_guard.minimum_confidence,
+        )
         self.database.initialize()
 
     def status(self) -> dict[str, Any]:

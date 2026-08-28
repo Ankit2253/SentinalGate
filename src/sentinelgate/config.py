@@ -45,12 +45,19 @@ class StorageConfig:
     state_dir: str = "./data"
     database: str = "./data/sentinelgate.db"
 
+@dataclass(slots=True)
+class C2GuardConfig:
+    enabled: bool = True
+    trusted_destinations: list[str] = field(default_factory=list)
+    threat_intelligence_ips: list[str] = field(default_factory=list)
+    minimum_confidence: float = 0.50
 
 @dataclass(slots=True)
 class AppConfig:
     server: ServerConfig = field(default_factory=ServerConfig)
     firewall: FirewallConfig = field(default_factory=FirewallConfig)
     storage: StorageConfig = field(default_factory=StorageConfig)
+    c2_guard: C2GuardConfig = field(default_factory=C2GuardConfig)
     source_path: Path | None = None
 
     @property
@@ -102,6 +109,18 @@ class AppConfig:
             raise ValueError("scan_window_seconds must be between 1 and 3600")
         if not 30 <= self.firewall.ban_seconds <= 604_800:
             raise ValueError("ban_seconds must be between 30 and 604800")
+        if not 0.0 <= self.c2_guard.minimum_confidence <= 1.0:
+            raise ValueError("c2_guard.minimum_confidence must be between 0.0 and 1.0")
+
+        self.c2_guard.trusted_destinations = [
+            str(ip_address(value))
+            for value in self.c2_guard.trusted_destinations
+        ]
+
+        self.c2_guard.threat_intelligence_ips = [
+            str(ip_address(value))
+            for value in self.c2_guard.threat_intelligence_ips
+        ]
 
 
 def _section(cls: type, data: dict[str, Any], key: str):
@@ -121,6 +140,7 @@ def load_config(path: str | Path | None = None) -> AppConfig:
         server=_section(ServerConfig, data, "server"),
         firewall=_section(FirewallConfig, data, "firewall"),
         storage=_section(StorageConfig, data, "storage"),
+        c2_guard=_section(C2GuardConfig, data, "c2_guard"),
         source_path=source_path,
     )
     config.validate()

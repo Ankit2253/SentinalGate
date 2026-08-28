@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sentinelgate"
-version = "1.0.0"
+version = "1.1.0"
 description = "A safe-by-default Linux stateful firewall and threat-monitoring platform"
 readme = "README.md"
 requires-python = ">=3.11"

@@ -1,0 +1,37 @@
+[Unit]
+Description=SentinelGate firewall control plane
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=sentinelgate
+Group=sentinelgate
+SupplementaryGroups=systemd-journal
+
+Environment=SENTINELGATE_CONFIG=/etc/sentinelgate/sentinelgate.toml
+EnvironmentFile=-/etc/default/sentinelgate
+
+ExecStart=/usr/bin/sentinelgate serve
+
+Restart=on-failure
+RestartSec=3
+
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+ReadWritePaths=/var/lib/sentinelgate
+
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

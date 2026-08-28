@@ -1,3 +1,4 @@
+
 import json
 
 import pytest
@@ -332,3 +333,64 @@ def test_c2_response_creates_audit_event(service: FirewallService) -> None:
     assert audit.details["source_c2_event_id"] == stored.id
     assert audit.details["reason"] == "Analyst confirmed suspicious beacon"
     assert audit.details["response"] == "analyst-approved-block"
+
+
+def test_c2_response_can_be_unbanned_and_audited(service: FirewallService) -> None:
+    event = Event(
+        event_type="suspected_c2_beacon",
+        severity="high",
+        action="detected",
+        destination_ip="203.0.113.91",
+        destination_port=443,
+        protocol="tcp",
+        details={"confidence": 1.0},
+    )
+    stored = service.database.add_event(event)
+
+    service.respond_to_c2_alert(
+        stored.id,
+        reason="Analyst approved temporary block",
+        seconds=300,
+    )
+
+    changed = service.unban("203.0.113.91")
+
+    assert changed is True
+
+    events = service.database.list_events(limit=20)
+
+    unban_events = [
+        item
+        for item in events
+        if item.event_type == "dynamic_unban"
+    ]
+
+    assert len(unban_events) == 1
+    assert unban_events[0].action == "unbanned"
+    assert unban_events[0].source_ip == "203.0.113.91"
+
+
+
+def test_rollback_creates_audit_event(service: FirewallService) -> None:
+    result = service.apply(reason="Create rollback test snapshot")
+
+    snapshot_id = result["snapshot_id"]
+
+    rollback = service.rollback(snapshot_id)
+
+    assert rollback["source_snapshot"] == snapshot_id
+
+    events = service.database.list_events(limit=20)
+
+    rollback_events = [
+        item
+        for item in events
+        if item.event_type == "ruleset_rollback"
+    ]
+
+    assert len(rollback_events) == 1
+
+    audit = rollback_events[0]
+
+    assert audit.details["source_snapshot"] == snapshot_id
+    assert audit.details["new_snapshot"] == rollback["snapshot_id"]

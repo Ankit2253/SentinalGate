@@ -78,6 +78,56 @@
       </div>
     </section>
 
+    <!-- C2 Guard starts here -->
+    <section class="panel">
+        <div class="panel-heading">
+            <div>
+                <span class="eyebrow">BEHAVIOR ANALYSIS</span>
+                <h2>C2 Guard</h2>
+            </div>
+        </div>
+
+        <div class="c2-stats-grid">
+            <div class="stat-card">
+                <span class="stat-label">Status</span>
+                <strong id="c2-enabled">Loading...</strong>
+            </div>
+
+            <div class="stat-card">
+                <span class="stat-label">C2 Alerts</span>
+                <strong id="c2-alerts-total">0</strong>
+            </div>
+
+            <div class="stat-card">
+                <span class="stat-label">High Severity</span>
+                <strong id="c2-high-severity">0</strong>
+            </div>
+        </div>
+
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Destination</th>
+                        <th>Port</th>
+                        <th>Protocol</th>
+                        <th>Severity</th>
+                        <th>Confidence</th>
+                    </tr>
+                </thead>
+                <tbody id="c2-alerts-body">
+                    <tr>
+                        <td colspan="6" class="empty">Loading C2 alerts...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+    <!-- C2 Guard ends here -->
+
+    <section class="panel">
+
     <section class="rules-layout">
       <article class="panel rules-panel">
         <div class="panel-heading">

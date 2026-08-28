@@ -13,6 +13,7 @@ from sentinelgate.config import load_config
 from sentinelgate.demo import seed_demo
 from sentinelgate.monitor import FirewallMonitor, journal_lines
 from sentinelgate.nftables import NftablesError
+from sentinelgate.observations import load_observations
 from sentinelgate.service import FirewallService
 
 DEFAULT_CONFIG = """# SentinelGate configuration
@@ -97,6 +98,26 @@ def build_parser() -> argparse.ArgumentParser:
     events.add_argument("--severity", choices=["info", "low", "medium", "high", "critical"])
     events.add_argument("--source")
 
+
+    c2 = commands.add_parser(
+        "c2",
+        help="Analyse safe outbound-connection observations",
+    )
+    c2_commands = c2.add_subparsers(
+        dest="c2_command",
+        required=True,
+    )
+
+    c2_analyse = c2_commands.add_parser(
+        "analyse",
+        help="Analyse observations from a JSONL file",
+    )
+    c2_analyse.add_argument(
+        "--file",
+        required=True,
+        help="Path to the JSONL observation file",
+    )
+
     ban = commands.add_parser("ban", help="Temporarily block an IP address")
     ban.add_argument("address")
     ban.add_argument("--reason", default="Manual CLI ban")
@@ -154,6 +175,8 @@ def main(argv: list[str] | None = None) -> None:
                     for event in service.database.list_events(args.limit, args.severity, args.source)
                 ]
             )
+        elif args.command == "c2":
+            _handle_c2(service, args)
         elif args.command == "ban":
             _json(service.ban(args.address, args.reason, args.seconds).to_dict())
         elif args.command == "unban":
@@ -209,6 +232,25 @@ def _handle_rules(service: FirewallService, args: argparse.Namespace) -> None:
         _json({"deleted": service.delete_rule(args.rule_id)})
     elif args.rules_command == "toggle":
         _json(service.update_rule(args.rule_id, {"enabled": args.state == "on"}).to_dict())
+
+def _handle_c2(
+    service: FirewallService,
+    args: argparse.Namespace,
+) -> None:
+    observations = load_observations(args.file)
+    events = service.analyse_c2_observations(observations)
+
+    _json(
+        {
+            "observations_processed": len(observations),
+            "detections": len(events),
+            "events": [
+                event.to_dict()
+                for event in events
+            ],
+        }
+    )
+
 
 
 def _serve(service: FirewallService, host: str | None, port: int | None) -> None:

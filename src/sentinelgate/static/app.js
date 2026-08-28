@@ -97,6 +97,35 @@ function renderEvents(events) {
   }).join("");
 }
 
+function renderC2Status(status) {
+    $("#c2-enabled").textContent = status.enabled ? "Enabled" : "Disabled";
+    $("#c2-alerts-total").textContent = (status.alerts_total || 0).toLocaleString();
+    $("#c2-high-severity").textContent = (status.high_severity || 0).toLocaleString();
+}
+
+function renderC2Alerts(alerts) {
+    const body = $("#c2-alerts-body");
+
+    if (!alerts.length) {
+        body.innerHTML =
+            '<tr><td colspan="6" class="empty">No C2 alerts detected.</td></tr>';
+        return;
+    }
+
+    body.innerHTML = alerts.slice(0, 10).map((alert) => {
+        const confidence = alert.details?.confidence ?? "—";
+
+        return `<tr>
+            <td>${escapeHtml(timeLabel(alert.occurred_at))}</td>
+            <td>${escapeHtml(alert.destination_ip)}</td>
+            <td>${escapeHtml(alert.destination_port)}</td>
+            <td>${escapeHtml((alert.protocol || "—").toUpperCase())}</td>
+            <td><span class="severity ${escapeHtml(alert.severity)}">${escapeHtml(alert.severity)}</span></td>
+            <td>${escapeHtml(confidence)}</td>
+        </tr>`;
+    }).join("");
+}
+
 function renderRules(rules) {
   const container = $("#rules-list");
   $("#rule-count").textContent = `${rules.length} RULE${rules.length === 1 ? "" : "S"}`;
@@ -117,13 +146,15 @@ function renderRules(rules) {
 
 async function loadAll() {
   try {
-    const [status, stats, rules, events] = await Promise.all([
-      api("/status"), api("/stats"), api("/rules"), api("/events?limit=40")
+    const [status, stats, rules, events, c2Status, c2Alerts] = await Promise.all([
+      api("/status"), api("/stats"), api("/rules"), api("/events?limit=40"), api("/c2/status"), api("/c2/alerts?limit=10")
     ]);
     renderStatus(status, stats);
     renderSources(stats.top_sources || []);
     renderEvents(events);
     renderRules(rules);
+    renderC2Status(c2Status);
+	renderC2Alerts(c2Alerts);
     $("#last-updated").textContent = `Last sync ${new Date().toLocaleTimeString()}`;
   } catch (error) {
     $("#system-state").textContent = "Control plane unavailable";

@@ -10,9 +10,11 @@ from pathlib import Path
 from typing import Any
 
 from sentinelgate import __version__
+from sentinelgate.c2guard import BeaconDetector
 from sentinelgate.config import AppConfig
 from sentinelgate.database import Database
-from sentinelgate.models import Ban, Event, Rule
+from sentinelgate.intelligence import ThreatIntelligence
+from sentinelgate.models import Ban, Event, NetworkObservation, Rule, ThreatIndicator
 from sentinelgate.nftables import NftablesBackend, RulesetRenderer
 
 
@@ -27,6 +29,24 @@ class FirewallService:
         self.database = database or Database(config.database_path)
         self.backend = backend or NftablesBackend(config.firewall)
         self.renderer = RulesetRenderer(config.firewall)
+        intelligence = ThreatIntelligence(
+             indicators=[
+                ThreatIndicator(
+                    value=address,
+                    indicator_type="ip",
+                    confidence=0.90,
+                    source="local-config",
+                    description="Configured local threat-intelligence indicator",
+                )
+                 for address in config.c2_guard.threat_intelligence_ips
+             ]
+        )
+
+        self.c2_detector = BeaconDetector(
+            intelligence=intelligence,
+            trusted_destinations=set(config.c2_guard.trusted_destinations),
+            minimum_confidence=config.c2_guard.minimum_confidence,
+        )
         self.database.initialize()
 
     def status(self) -> dict[str, Any]:
@@ -40,6 +60,7 @@ class FirewallService:
             "rules_enabled": sum(rule.enabled for rule in rules),
             "active_bans": len(self.database.list_bans()),
             "active_snapshot": self.database.active_snapshot_id(),
+            "c2_guard": self.c2_status(),
             "policies": {
                 "input": self.config.firewall.default_input_policy,
                 "forward": self.config.firewall.default_forward_policy,
@@ -182,3 +203,68 @@ class FirewallService:
         }
         target.write_text(json.dumps(report, indent=2), encoding="utf-8")
         return target.resolve()
+    def analyse_c2_observations(
+        self,
+        observations: list[NetworkObservation],
+    ) -> list[Event]:
+        """Analyse outbound observations and store generated C2 events."""
+
+        events = self.c2_detector.analyse_events(observations)
+
+        for event in events:
+            self.database.add_event(event)
+
+        return events   
+    def c2_status(self) -> dict[str, Any]:
+        """Return a summary of stored C2 Guard alerts."""
+
+        events = [
+            event
+            for event in self.database.list_events(limit=1000)
+            if event.event_type == "suspected_c2_beacon"
+        ]
+
+        return {
+            "enabled": True,
+            "alerts_total": len(events),
+            "high_severity": sum(
+                event.severity in {"high", "critical"}
+                for event in events
+            ),
+            "latest_alert": events[0].to_dict() if events else None,
+        }
+        
+    def respond_to_c2_alert(
+        self,
+        event_id: int,
+        *,
+        reason: str = "Analyst-approved C2 response",
+        seconds: int | None = None,
+    ) -> dict[str, Any]:
+        """Manually block the destination associated with a stored C2 alert."""
+
+        event = self.database.get_event(event_id)
+
+        if event is None:
+            raise ValueError(f"Event {event_id} was not found")
+
+        if event.event_type != "suspected_c2_beacon":
+            raise ValueError("Event is not a C2 Guard alert")
+
+        if not event.destination_ip:
+            raise ValueError("C2 alert does not contain a destination IP")
+
+        ban = self.ban(
+            event.destination_ip,
+            reason,
+            seconds,
+        )
+
+        return {
+            "event_id": event_id,
+            "destination_ip": event.destination_ip,
+            "action": "blocked",
+            "ban": ban.to_dict(),
+        }
+
+   

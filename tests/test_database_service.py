@@ -2,7 +2,8 @@ import json
 
 import pytest
 
-from sentinelgate.models import Event
+from sentinelgate.c2guard import BeaconDetector
+from sentinelgate.models import Event, NetworkObservation
 from sentinelgate.service import FirewallService
 
 
@@ -80,3 +81,198 @@ def test_report_contains_evidence(service: FirewallService, tmp_path) -> None:
     assert report["snapshots"][0]["reason"] == "Create snapshot"
     assert report["recent_events"][0]["event_type"] == "ruleset_apply"
 
+def test_database_stores_c2_detection_event(service) -> None:
+    observations = [
+        NetworkObservation(
+            destination_ip="203.0.113.50",
+            destination_port=443,
+            protocol="tcp",
+            observed_at="2026-08-20T12:00:00+00:00",
+        ),
+        NetworkObservation(
+            destination_ip="203.0.113.50",
+            destination_port=443,
+            protocol="tcp",
+            observed_at="2026-08-20T12:00:20+00:00",
+        ),
+        NetworkObservation(
+            destination_ip="203.0.113.50",
+            destination_port=443,
+            protocol="tcp",
+            observed_at="2026-08-20T12:00:40+00:00",
+        ),
+        NetworkObservation(
+            destination_ip="203.0.113.50",
+            destination_port=443,
+            protocol="tcp",
+            observed_at="2026-08-20T12:01:00+00:00",
+        ),
+        NetworkObservation(
+            destination_ip="203.0.113.50",
+            destination_port=443,
+            protocol="tcp",
+            observed_at="2026-08-20T12:01:20+00:00",
+        ),
+    ]
+
+    detector = BeaconDetector()
+
+    events = detector.analyse_events(observations)
+
+    assert len(events) == 1
+
+    service.database.add_event(events[0])
+
+    stored = service.database.list_events(limit=10)
+
+    assert any(
+        event.event_type == "suspected_c2_beacon"
+        and event.destination_ip == "203.0.113.50"
+        for event in stored
+    )
+def test_service_analyses_and_stores_c2_events(
+    service: FirewallService,
+) -> None:
+    observations = [
+        NetworkObservation(
+            destination_ip="203.0.113.50",
+            destination_port=443,
+            protocol="tcp",
+            observed_at=f"2026-08-20T12:0{minute}:00+00:00",
+        )
+        for minute in range(5)
+    ]
+
+    events = service.analyse_c2_observations(observations)
+
+    assert len(events) == 1
+    assert events[0].id is not None
+    assert events[0].event_type == "suspected_c2_beacon"
+
+    stored = service.database.list_events(limit=10)
+
+    assert any(
+        event.event_type == "suspected_c2_beacon"
+        and event.destination_ip == "203.0.113.50"
+        for event in stored
+    )
+def test_service_does_not_store_normal_sparse_activity(
+    service: FirewallService,
+) -> None:
+    observations = [
+        NetworkObservation(
+            destination_ip="203.0.113.50",
+            destination_port=443,
+            protocol="tcp",
+            observed_at="2026-08-20T12:00:00+00:00",
+        ),
+        NetworkObservation(
+            destination_ip="203.0.113.50",
+            destination_port=443,
+            protocol="tcp",
+            observed_at="2026-08-20T12:03:00+00:00",
+        ),
+    ]
+
+    events = service.analyse_c2_observations(observations)
+
+    assert events == []
+    assert service.database.list_events(limit=10) == []
+
+
+def test_c2_status_is_empty_initially(service: FirewallService) -> None:
+    status = service.c2_status()
+
+    assert status["enabled"] is True
+    assert status["alerts_total"] == 0
+    assert status["high_severity"] == 0
+    assert status["latest_alert"] is None
+
+
+def test_c2_status_reports_stored_alert(service: FirewallService) -> None:
+    service.database.add_event(
+        Event(
+            event_type="suspected_c2_beacon",
+            severity="high",
+            action="detected",
+            destination_ip="203.0.113.50",
+            destination_port=443,
+            protocol="tcp",
+            details={
+                "confidence": 0.95,
+                "detector": "periodic_beacon",
+            },
+        )
+    )
+
+    status = service.c2_status()
+
+    assert status["alerts_total"] == 1
+    assert status["high_severity"] == 1
+    assert status["latest_alert"] is not None
+    assert status["latest_alert"]["destination_ip"] == "203.0.113.50"
+
+
+def test_main_status_includes_c2_guard(service: FirewallService) -> None:
+    status = service.status()
+
+    assert "c2_guard" in status
+    assert status["c2_guard"]["alerts_total"] == 0
+def test_c2_response_rejects_non_c2_event(service: FirewallService) -> None:
+    event = Event(
+        event_type="firewall_decision",
+        severity="medium",
+        action="blocked",
+        destination_ip="203.0.113.25",
+        destination_port=443,
+        protocol="tcp",
+    )
+
+    stored = service.database.add_event(event)
+
+    with pytest.raises(ValueError, match="not a C2 Guard alert"):
+        service.respond_to_c2_alert(stored.id)
+def test_c2_response_uses_existing_ban_path(service: FirewallService) -> None:
+    event = Event(
+        event_type="suspected_c2_beacon",
+        severity="high",
+        action="detected",
+        destination_ip="203.0.113.90",
+        destination_port=443,
+        protocol="tcp",
+        details={"confidence": 1.0},
+    )
+
+    stored = service.database.add_event(event)
+
+    result = service.respond_to_c2_alert(
+        stored.id,
+        reason="Analyst approved test response",
+        seconds=300,
+    )
+
+    assert result["event_id"] == stored.id
+    assert result["destination_ip"] == "203.0.113.90"
+    assert result["action"] == "blocked"
+
+
+def test_service_uses_configured_c2_trusted_destination(app_config) -> None:
+    app_config.c2_guard.trusted_destinations = ["192.0.2.25"]
+
+    service = FirewallService(app_config)
+
+    assert "192.0.2.25" in service.c2_detector.trusted_destinations
+
+
+def test_service_uses_configured_threat_intelligence_ip(app_config) -> None:
+    app_config.c2_guard.threat_intelligence_ips = ["198.51.100.99"]
+
+    service = FirewallService(app_config)
+
+    indicator = service.c2_detector.intelligence.match_ip("198.51.100.99")
+
+    assert indicator is not None
+    assert indicator.value == "198.51.100.99"
+    assert indicator.source == "local-config"
+
+    

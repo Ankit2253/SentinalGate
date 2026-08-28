@@ -1,7 +1,7 @@
-SUMMARY = "Minimal embedded Linux image with SentinelGate security hardening"
-DESCRIPTION = "Extends core-image-minimal with the SentinelGate v1.0 hardening policy."
+SUMMARY = "Minimal Linux image with SentinelGate v1.1 and security hardening"
+DESCRIPTION = "Extends core-image-minimal with SentinelGate v1.1 and the SentinelGate hardening policy."
 LICENSE = "MIT"
 
 require recipes-core/images/core-image-minimal.bb
 
-IMAGE_INSTALL:append = " sentinelgate-hardening"
+IMAGE_INSTALL:append = " sentinelgate sentinelgate-hardening"

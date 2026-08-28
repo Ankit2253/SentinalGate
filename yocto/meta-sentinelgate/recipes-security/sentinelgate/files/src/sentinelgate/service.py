@@ -208,7 +208,8 @@ class FirewallService:
         observations: list[NetworkObservation],
     ) -> list[Event]:
         """Analyse outbound observations and store generated C2 events."""
-
+        if not self.config.c2_guard.enabled:
+            return []
         events = self.c2_detector.analyse_events(observations)
 
         for event in events:
@@ -225,7 +226,7 @@ class FirewallService:
         ]
 
         return {
-            "enabled": True,
+            "enabled": self.config.c2_guard.enabled,
             "alerts_total": len(events),
             "high_severity": sum(
                 event.severity in {"high", "critical"}

@@ -276,3 +276,22 @@ def test_service_uses_configured_threat_intelligence_ip(app_config) -> None:
     assert indicator.source == "local-config"
 
     
+def test_disabled_c2_guard_does_not_analyse_or_store_events(app_config) -> None:
+    app_config.c2_guard.enabled = False
+    service = FirewallService(app_config)
+
+    observations = [
+        NetworkObservation(
+            destination_ip="198.51.100.200",
+            destination_port=443,
+            protocol="tcp",
+            observed_at=f"2026-08-29T00:00:{second:02d}+00:00",
+        )
+        for second in (0, 20, 40)
+    ]
+
+    events = service.analyse_c2_observations(observations)
+
+    assert events == []
+    assert service.c2_status()["enabled"] is False
+    assert service.c2_status()["alerts_total"] == 0

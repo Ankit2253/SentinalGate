@@ -260,7 +260,21 @@ class FirewallService:
             reason,
             seconds,
         )
-
+        self.database.add_event(
+            Event(
+                event_type="c2_response",
+                severity="high",
+                action="blocked",
+                destination_ip=event.destination_ip,
+                destination_port=event.destination_port,
+                protocol=event.protocol,
+                details={
+                    "source_c2_event_id": event_id,
+                    "reason": reason[:200],
+                    "response": "analyst-approved-block",
+                },
+            )
+        )
         return {
             "event_id": event_id,
             "destination_ip": event.destination_ip,

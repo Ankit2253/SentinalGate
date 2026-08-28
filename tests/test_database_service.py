@@ -295,3 +295,40 @@ def test_disabled_c2_guard_does_not_analyse_or_store_events(app_config) -> None:
     assert events == []
     assert service.c2_status()["enabled"] is False
     assert service.c2_status()["alerts_total"] == 0
+
+
+def test_c2_response_creates_audit_event(service: FirewallService) -> None:
+    event = Event(
+        event_type="suspected_c2_beacon",
+        severity="high",
+        action="detected",
+        destination_ip="203.0.113.90",
+        destination_port=443,
+        protocol="tcp",
+        details={"confidence": 1.0},
+    )
+    stored = service.database.add_event(event)
+
+    service.respond_to_c2_alert(
+        stored.id,
+        reason="Analyst confirmed suspicious beacon",
+        seconds=300,
+    )
+
+    events = service.database.list_events(limit=20)
+
+    audit_events = [
+        item
+        for item in events
+        if item.event_type == "c2_response"
+    ]
+
+    assert len(audit_events) == 1
+
+    audit = audit_events[0]
+
+    assert audit.action == "blocked"
+    assert audit.destination_ip == "203.0.113.90"
+    assert audit.details["source_c2_event_id"] == stored.id
+    assert audit.details["reason"] == "Analyst confirmed suspicious beacon"
+    assert audit.details["response"] == "analyst-approved-block"
